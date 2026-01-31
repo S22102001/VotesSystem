@@ -2,11 +2,10 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  PutCommand,
+  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
-import crypto from "crypto";
 
-const TABLE_NAME = process.env.POLLS_TABLE; // "Polls"
+const TABLE_NAME = process.env.POLLS_TABLE; // Polls
 const ADMIN_KEY = process.env.ADMIN_KEY;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -26,17 +25,9 @@ function getAdminKey(event) {
   );
 }
 
-function makeRandomPollId() {
-  const rand = crypto.randomBytes(8).toString("hex");
-  return `poll-${rand}`;
-}
-
-function isValidPollId(pollId) {
-  return typeof pollId === "string" && /^[A-Za-z0-9_-]{1,50}$/.test(pollId);
-}
-
 export const handler = async (event) => {
   try {
+    // Admin auth
     const provided = getAdminKey(event);
     if (!ADMIN_KEY || provided !== ADMIN_KEY) {
       return {
@@ -47,63 +38,57 @@ export const handler = async (event) => {
     }
 
     const body = event?.body ? JSON.parse(event.body) : {};
-    let desiredPollId = body?.pollId?.trim();
+    let pollId = body?.pollId;
 
-    let pollId;
-    if (desiredPollId) {
-      if (!isValidPollId(desiredPollId)) {
-        return {
-          statusCode: 400,
-          headers: corsHeaders,
-          body: JSON.stringify({
-            error: "Invalid pollId",
-            hint: "Use only letters/numbers/_/- up to 50 chars",
-          }),
-        };
-      }
-      pollId = desiredPollId;
-    } else {
-      pollId = makeRandomPollId();
+    // If pollId not provided -> take from CURRENT
+    if (!pollId) {
+      const cur = await ddb.send(
+        new GetCommand({
+          TableName: TABLE_NAME,
+          Key: { key: "CURRENT" },
+        })
+      );
+      pollId = cur?.Item?.pollId;
     }
 
-    // if exist don't override
-    const existing = await ddb.send(
+    if (!pollId) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: "CURRENT.pollId not set" }),
+      };
+    }
+
+    // Ensure poll exists
+    const poll = await ddb.send(
       new GetCommand({
         TableName: TABLE_NAME,
         Key: { key: pollId },
       })
     );
 
-    if (existing?.Item) {
+    if (!poll?.Item) {
       return {
-        statusCode: 409,
+        statusCode: 404,
         headers: corsHeaders,
-        body: JSON.stringify({ error: "Poll already exists", pollId }),
+        body: JSON.stringify({ error: "Poll not found", pollId }),
       };
     }
 
+    // Reset results
     const now = new Date().toISOString();
-
-    // 1) create poll
     await ddb.send(
-      new PutCommand({
+      new UpdateCommand({
         TableName: TABLE_NAME,
-        Item: {
-          key: pollId,
-          createdAt: now,
-          results: { optionA: 0, optionB: 0 },
+        Key: { key: pollId },
+        UpdateExpression: "SET #r = :r, #resetAt = :t",
+        ExpressionAttributeNames: {
+          "#r": "results",
+          "#resetAt": "resetAt",
         },
-      })
-    );
-
-    // 2) updating CURRENT
-    await ddb.send(
-      new PutCommand({
-        TableName: TABLE_NAME,
-        Item: {
-          key: "CURRENT",
-          pollId,
-          updatedAt: now,
+        ExpressionAttributeValues: {
+          ":r": { optionA: 0, optionB: 0 },
+          ":t": now,
         },
       })
     );
@@ -117,7 +102,7 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: "newPoll failed", details: String(err) }),
+      body: JSON.stringify({ error: "reset failed", details: String(err) }),
     };
   }
 };
