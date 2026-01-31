@@ -1,53 +1,54 @@
 import { VOTE_API_URL, RESULTS_API_URL } from "./config.js";
 
-const $ = (id) => document.getElementById(id);
-
-function getOrCreateDeviceId() {
-  const key = "voteSystemDeviceId";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID(); 
-    localStorage.setItem(key, id);
-  }
-  return id;
+// Display output on screen
+function showOutput(data) {
+  document.getElementById("out").textContent = JSON.stringify(data, null, 2);
 }
 
-function show(obj) {
-  $("out").textContent = JSON.stringify(obj, null, 2);
+// Read ID number from input
+function getIdNumber() {
+  const el = document.getElementById("idNumber");
+  return (el?.value || "").trim();
 }
 
-async function postVote() {
-  const pollId = $("pollId").value.trim();
-  const optionId = $("optionId").value.trim();
-  if (!pollId || !optionId) {
-    return show({ error: "pollId ו-optionId הם חובה" });
+// Send vote to backend
+export async function vote(optionId) {
+  const pollId = "poll1";
+  const idNumber = getIdNumber();
+
+  if (!idNumber) {
+    showOutput({ message: "Please enter Israeli ID first." });
+    return;
   }
 
-  const voterKey = getOrCreateDeviceId(); 
-  const payload = { pollId, optionId, voterKey };
+  try {
+    const res = await fetch(VOTE_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Send raw ID to server ONLY for validation + hashing
+      body: JSON.stringify({ pollId, optionId, idNumber }),
+    });
 
-  const res = await fetch(VOTE_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  show({ status: res.status, ...data, sent: payload });
+    const data = await res.json();
+    showOutput(data);
+  } catch (err) {
+    showOutput({ error: err.message });
+  }
 }
 
-async function getResults() {
-  const pollId = $("pollId").value.trim();
-  if (!pollId) return show({ error: "pollId חובה" });
+// Load results from backend
+export async function loadResults() {
+  const pollId = "poll1";
 
-  const url = `${RESULTS_API_URL}?pollId=${encodeURIComponent(pollId)}`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-  show({ status: res.status, ...data });
+  try {
+    const res = await fetch(`${RESULTS_API_URL}?pollId=${pollId}`);
+    const data = await res.json();
+    showOutput(data);
+  } catch (err) {
+    showOutput({ error: err.message });
+  }
 }
 
-$("voteBtn").addEventListener("click", postVote);
-$("resultsBtn").addEventListener("click", getResults);
-
-// shows the user identifier
-$("voterKey").value = getOrCreateDeviceId();
+// Expose functions for HTML buttons
+window.vote = vote;
+window.loadResults = loadResults;

@@ -1,32 +1,32 @@
-<!doctype html>
-<html lang="he">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vote System</title>
-  <style>
-    body { font-family: Arial; max-width: 720px; margin: 40px auto; }
-    input { width: 100%; padding: 10px; margin: 6px 0 12px; }
-    button { padding: 10px 14px; margin-right: 10px; cursor: pointer; }
-    pre { background: #111; color: #0f0; padding: 12px; overflow: auto; }
-  </style>
+  <title>Cloud Voting System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 <body>
-  <h1>Vote System</h1>
+  <h1>Vote Now</h1>
 
-  <label>pollId</label>
-  <input id="pollId" placeholder="poll1" value="poll1" />
+  <!-- Voter ID input (Israeli ID) -->
+  <label for="idNumber">Israeli ID:</label>
+  <input id="idNumber" type="text" placeholder="Enter ID (5-9 digits)" />
 
-  <label>optionId</label>
-  <input id="optionId" placeholder="optionA" value="optionA" />
+  <p style="font-size: 12px; opacity: 0.8;">
+    <!-- Short note for privacy -->
+    We validate the ID and send it to the server. The server stores only a hashed key (not the raw ID).
+  </p>
 
-  <label>voterKey</label>
-  <input id="voterKey" disabled />
+  <!-- Vote buttons -->
+  <button onclick="vote('optionA')">Vote Option A</button>
+  <button onclick="vote('optionB')">Vote Option B</button>
 
-  <button id="voteBtn">send votes</button>
-  <button id="resultsBtn">results</button>
+  <hr />
 
-  <h3>Output</h3>
+  <!-- Results button -->
+  <button onclick="loadResults()">Show Results</button>
+
+  <h2>Output</h2>
   <pre id="out">{}</pre>
 
   <script type="module" src="./app.js"></script>
