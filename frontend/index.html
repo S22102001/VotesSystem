@@ -1,53 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Cloud Voting System</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  </head>
+<head>
+  <meta charset="UTF-8" />
+  <title>Cloud Voting System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
 
-  <body>
-    <h1>Vote Now</h1>
+<body>
 
-    <!-- Poll selector -->
-    <label for="pollId"><b>Poll ID:</b></label>
-    <input id="pollId" type="text" placeholder="Leave empty = CURRENT, or type poll-..." />
+  <h1>🗳️ Cloud Voting System</h1>
 
-    <p><b>Current pollId:</b> <span id="currentPollId">(unknown)</span></p>
+  <div class="container">
 
-    <hr />
+    <!-- Poll Box -->
+    <div class="card">
+      <h2>Vote Now</h2>
 
-    <!-- Voter ID input (Israeli ID) -->
-    <label for="idNumber">Israeli ID:</label>
-    <input id="idNumber" type="text" placeholder="Enter ID (5-9 digits)" />
+      <label><b>Poll ID:</b></label>
+      <input id="pollId" type="text" placeholder="Leave empty = CURRENT" />
+      <p><b>Current pollId:</b> <span id="currentPollId">(unknown)</span></p>
 
-    <p style="font-size: 12px; opacity: 0.8;">
-      We validate the ID and send it to the server. The server stores only a hashed key (not the raw ID).
-    </p>
+      <label>Israeli ID:</label>
+      <input id="idNumber" type="text" placeholder="Enter ID (5-9 digits)" />
 
-    <!-- Vote buttons -->
-    <button id="voteA">Vote Option A</button>
-    <button id="voteB">Vote Option B</button>
-
-    <hr />
-
-    <!-- Admin -->
-    <h2>Admin</h2>
-
-    <label for="adminKey">Admin Key</label>
-    <input id="adminKey" type="password" placeholder="Enter admin key" />
-
-    <button id="newPollBtn">New Poll</button>
-    <button id="resetPollBtn">Reset Poll</button>
-
-    <hr />
+      <div class="buttons">
+        <button id="voteA">Vote Option A</button>
+        <button id="voteB">Vote Option B</button>
+      </div>
+    </div>
 
     <!-- Results -->
-    <button id="showResultsBtn">Show Results</button>
+  <div class="card">
+  <h2>Results</h2>
+    <div class="results-row">
+      <div class="results-label">Option A</div>
+      <div class="bar-container">
+        <div class="bar-fill" id="barA"></div>
+      </div>
+      <div class="results-count" id="countA">0 votes</div>
+    </div>
 
-    <h2>Output</h2>
-    <pre id="out">{}</pre>
+    <div class="results-row">
+      <div class="results-label">Option B</div>
+      <div class="bar-container">
+        <div class="bar-fill" id="barB"></div>
+      </div>
+      <div class="results-count" id="countB">0 votes</div>
+    </div>
+</div>
 
-    <script type="module" src="./app.js"></script>
-  </body>
+
+
+    <!-- Admin Toggle -->
+    <button class="admin-toggle" onclick="toggleAdmin()">⚙️ Admin Panel</button>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="admin-panel hidden">
+      <h2>Admin Controls</h2>
+
+      <label>Admin Key</label>
+      <input id="adminKey" type="password" placeholder="Enter admin key" />
+
+      <div class="buttons">
+        <button id="newPollBtn">New Poll</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+  <div id="toastWrap" class="toast-wrap"></div>
 </html>

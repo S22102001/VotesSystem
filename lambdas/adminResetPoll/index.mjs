@@ -1,108 +1,85 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import {
+  DynamoDBClient
+} from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  GetCommand,
-  UpdateCommand,
+  QueryCommand,
+  BatchWriteCommand,
+  DeleteCommand,
+  UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
 
-const TABLE_NAME = process.env.POLLS_TABLE; // Polls
-const ADMIN_KEY = process.env.ADMIN_KEY;
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
 
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "http://127.0.0.1:5500",
-  "Access-Control-Allow-Headers": "content-type,x-admin-key",
-  "Access-Control-Allow-Methods": "OPTIONS,POST",
-};
-
-function getAdminKey(event) {
-  return (
-    event?.headers?.["x-admin-key"] ||
-    event?.headers?.["X-Admin-Key"] ||
-    event?.headers?.["X-ADMIN-KEY"] ||
-    ""
-  );
-}
+const POLLS_TABLE = process.env.POLLS_TABLE;
+const VOTES_TABLE = process.env.VOTES_TABLE;
+const VOTERS_TABLE = process.env.VOTERS_TABLE;
 
 export const handler = async (event) => {
   try {
-    // Admin auth
-    const provided = getAdminKey(event);
-    if (!ADMIN_KEY || provided !== ADMIN_KEY) {
-      return {
-        statusCode: 401,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: "Unauthorized" }),
-      };
-    }
-
-    const body = event?.body ? JSON.parse(event.body) : {};
-    let pollId = body?.pollId;
-
-    // If pollId not provided -> take from CURRENT
-    if (!pollId) {
-      const cur = await ddb.send(
-        new GetCommand({
-          TableName: TABLE_NAME,
-          Key: { key: "CURRENT" },
-        })
-      );
-      pollId = cur?.Item?.pollId;
-    }
+    const { pollId } = JSON.parse(event.body);
 
     if (!pollId) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: "CURRENT.pollId not set" }),
-      };
+      return { statusCode: 400, body: "pollId required" };
     }
 
-    // Ensure poll exists
-    const poll = await ddb.send(
-      new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { key: pollId },
-      })
-    );
+    await docClient.send(new DeleteCommand({
+      TableName: VOTES_TABLE,
+      Key: { pollId, optionId: "optionA" }
+    }));
 
-    if (!poll?.Item) {
-      return {
-        statusCode: 404,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: "Poll not found", pollId }),
-      };
-    }
+    await docClient.send(new DeleteCommand({
+      TableName: VOTES_TABLE,
+      Key: { pollId, optionId: "optionB" }
+    }));
 
-    // Reset results
-    const now = new Date().toISOString();
-    await ddb.send(
-      new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { key: pollId },
-        UpdateExpression: "SET #r = :r, #resetAt = :t",
-        ExpressionAttributeNames: {
-          "#r": "results",
-          "#resetAt": "resetAt",
-        },
-        ExpressionAttributeValues: {
-          ":r": { optionA: 0, optionB: 0 },
-          ":t": now,
-        },
-      })
-    );
+    let lastKey = undefined;
+
+    do {
+      const res = await docClient.send(new QueryCommand({
+        TableName: VOTERS_TABLE,
+        KeyConditionExpression: "pollId = :p",
+        ExpressionAttributeValues: { ":p": pollId },
+        ExclusiveStartKey: lastKey
+      }));
+
+      if (res.Items && res.Items.length > 0) {
+        const deletes = res.Items.map(item => ({
+          DeleteRequest: {
+            Key: {
+              pollId: item.pollId,
+              voterKey: item.voterKey
+            }
+          }
+        }));
+
+        await docClient.send(new BatchWriteCommand({
+          RequestItems: {
+            [VOTERS_TABLE]: deletes
+          }
+        }));
+      }
+
+      lastKey = res.LastEvaluatedKey;
+    } while (lastKey);
+
+    await docClient.send(new UpdateCommand({
+      TableName: POLLS_TABLE,
+      Key: { pollId },
+      UpdateExpression: "SET results = :r",
+      ExpressionAttributeValues: {
+        ":r": { optionA: 0, optionB: 0 }
+      }
+    }));
 
     return {
       statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ ok: true, pollId }),
+      body: JSON.stringify({ message: "Poll fully reset" })
     };
+
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: "reset failed", details: String(err) }),
-    };
+    console.error(err);
+    return { statusCode: 500, body: "Error resetting poll" };
   }
 };
